@@ -1,0 +1,100 @@
+/* ===== Reset & Base Styles ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+}
+
+/* ===== Login Box Container ===== */
+.login-box {
+  background-color: #ffffff;
+  width: 380px;
+  padding: 40px 32px;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+/* ===== Logo Placeholder ===== */
+.logo-placeholder {
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 16px auto;
+  background-color: #2575fc;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+/* ===== Title ===== */
+.app-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #222222;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #888888;
+  margin-bottom: 24px;
+}
+
+/* ===== Form Container ===== */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+/* ===== Input Group ===== */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-group label {
+  font-size: 13px;
+  color: #444444;
+  font-weight: 600;
+}
+
+.input-group input {
+  padding: 12px 14px;
+  border: 1px solid #dddddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.input-group input:focus {
+  border-color: #2575fc;
+}
+
+/* ===== Login Button ===== */
+.login-button {
+  margin-top: 8px;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background-color: #2575fc;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}

@@ -1,0 +1,30 @@
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+*.local
+
+# Java / Maven
+**/target/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+
+# Node / frontend build
+**/node_modules/
+**/dist/
+**/build/
+
+# Logs / temp
+**/*.log
+**/*.tmp
+**/*.temp
+
+# IDE / OS
+**/.idea/
+**/.vscode/
+.DS_Store
+Thumbs.db

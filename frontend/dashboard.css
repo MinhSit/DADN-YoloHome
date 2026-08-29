@@ -1,0 +1,613 @@
+/* ===== Reset & Base ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+body {
+  background-color: #f4f6fb;
+  color: #1f2430;
+}
+
+/* ===== Layout: sidebar + main content side by side ===== */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ===== Sidebar (dark theme for contrast against light content) ===== */
+.sidebar {
+  width: 230px;
+  background-color: #171c2c;
+  color: #ffffff;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+
+.logo-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #2575fc;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.sidebar-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+/* Nav items are <button> elements styled to look like links,
+   so JS can attach click handlers without needing <a href="#"> */
+.nav-item {
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #b7bccb;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-item:hover {
+  background-color: #232a40;
+  color: #ffffff;
+}
+
+.nav-item.active {
+  background-color: #2575fc;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.logout-btn {
+  color: #ff6b6b;
+}
+
+.logout-btn:hover {
+  background-color: #2a1c22;
+  color: #ff8585;
+}
+
+/* ===== Main content ===== */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* allows tables/charts to shrink instead of overflowing */
+}
+
+.topbar {
+  height: 70px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.topbar-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.account-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #6a11cb;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.account-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.content-body {
+  flex: 1;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-x: hidden;
+}
+
+/* ===== Page switching ===== */
+/* Only the .page with .active is visible. dashboard.js toggles this
+   class; the fade transition happens purely through CSS. */
+.page {
+  display: none;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.25s ease;
+}
+
+.page.active {
+  display: flex;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== Shared card style ===== */
+.card {
+  background-color: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+/* ===== Sensor cards (Overview) ===== */
+.sensor-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+}
+
+.sensor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-label {
+  font-size: 13px;
+  color: #888888;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sensor-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #2575fc;
+}
+
+.sensor-subtext {
+  font-size: 12px;
+  color: #999999;
+}
+
+/* ===== Device list (Overview quick status) ===== */
+.device-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  gap: 12px;
+}
+
+.device-item:last-child {
+  border-bottom: none;
+}
+
+.device-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.status-on   { background-color: #e6f7ec; color: #1a7f37; }
+.status-off  { background-color: #f1f1f1; color: #666666; }
+.status-locked   { background-color: #eaf0ff; color: #2575fc; }
+.status-unlocked { background-color: #fff4e5; color: #b26a00; }
+
+/* Toggle switch used for Light/Fan on Devices + Overview */
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: #d9dce3;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #2575fc;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* Door uses a plain button instead of a toggle, since "lock/unlock"
+   reads more clearly as an action than an on/off switch */
+.lock-btn {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #2575fc;
+  background-color: #ffffff;
+  color: #2575fc;
+  cursor: pointer;
+}
+
+.lock-btn:hover {
+  background-color: #eaf0ff;
+}
+
+/* ===== Notification / alert list (Overview + Alerts page) ===== */
+.notification-list, .alert-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notification-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.notification-item:last-child { border-bottom: none; }
+
+.notification-text { font-size: 14px; }
+
+.notification-time {
+  font-size: 12px;
+  color: #999999;
+  white-space: nowrap;
+}
+
+/* ===== Alerts page ===== */
+.alert-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 10px;
+  background-color: #f9fafc;
+  border-left: 4px solid #cccccc;
+}
+
+.alert-item.unread {
+  background-color: #f4f8ff;
+}
+
+.alert-level {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.alert-item.level-Info .alert-level     { background-color: #eaf0ff; color: #2575fc; }
+.alert-item.level-Warning .alert-level  { background-color: #fff4e5; color: #b26a00; }
+.alert-item.level-Critical .alert-level { background-color: #fdeaea; color: #d93025; }
+
+.alert-item.level-Info     { border-left-color: #2575fc; }
+.alert-item.level-Warning  { border-left-color: #f5a623; }
+.alert-item.level-Critical { border-left-color: #d93025; }
+
+.alert-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.alert-message { font-size: 14px; font-weight: 500; }
+.alert-time { font-size: 12px; color: #999999; }
+
+.mark-read-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #d9dce3;
+  background-color: #ffffff;
+  color: #444444;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mark-read-btn:hover { background-color: #f0f2f8; }
+.mark-read-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ===== Tables (Devices, Sensors, Activity Logs) ===== */
+.device-table-wrapper {
+  overflow-x: auto; /* keeps tables usable on tablet width */
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888888;
+  padding: 10px 12px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.data-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ===== Filter bar (Activity Logs) ===== */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d9dce3;
+  font-size: 13px;
+  background-color: #ffffff;
+}
+
+/* ===== Charts ===== */
+.mini-chart {
+  width: 100%;
+  max-width: 100%;
+}
+
+.big-chart {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* ===== Stats grid (Sensors page) ===== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.stat-box {
+  background-color: #f9fafc;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+.stat-box-label {
+  font-size: 12px;
+  color: #888888;
+  text-transform: uppercase;
+}
+
+.stat-box-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2575fc;
+  margin-top: 4px;
+}
+
+/* ===== Settings page ===== */
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 380px;
+}
+
+.settings-form .input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #444444;
+}
+
+.settings-form input {
+  padding: 10px 12px;
+  border: 1px solid #d9dce3;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.settings-form input:disabled {
+  background-color: #f4f6fb;
+  color: #888888;
+}
+
+.primary-btn {
+  align-self: flex-start;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background-color: #2575fc;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-btn:hover {
+  background-color: #1a5fd6;
+}
+
+.status-message {
+  font-size: 13px;
+  color: #1a7f37;
+  min-height: 16px;
+}
+
+.last-updated {
+  font-size: 12px;
+  color: #999999;
+}
+
+/* ===== Responsive: tablet ===== */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 76px;
+    padding: 20px 8px;
+  }
+
+  .sidebar-title {
+    display: none; /* icon-only sidebar on narrower screens */
+  }
+
+  .nav-item {
+    text-align: center;
+    font-size: 11px;
+  }
+
+  .content-body {
+    padding: 20px;
+  }
+
+  .settings-form {
+    max-width: 100%;
+  }
+}
+
+/* ========== Overview 2 cột ========== */
+.overview-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;   /* 2 cột bằng nhau */
+  gap: 24px;
+  margin-top: 20px;
+  align-items: stretch;              
+}
+
+/* Đảm bảo 2 card không bị tràn */
+.device-control-card,
+.threshold-card {
+  min-width: 0;                    
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Form bên Threshold */
+.threshold-card .settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.threshold-card input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Mô tả nhỏ dưới title */
+.card-desc {
+  font-size: 0.9rem;
+  color: #666;
+  margin: -6px 0 16px 0;
+}
+
+/* Mobile: xếp dọc */
+@media (max-width: 768px) {
+  .overview-bottom {
+    grid-template-columns: 1fr;
+  }
+}
