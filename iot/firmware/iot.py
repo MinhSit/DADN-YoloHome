@@ -19,6 +19,16 @@ fan_state = False
 
 
 # ==================================================
+# CONTROL MODE
+#
+# MANUAL: V12 actuator commands are allowed.
+# AUTO:   sensor rules control actuators; V12 is ignored.
+# ==================================================
+
+system_mode = "MANUAL"
+
+
+# ==================================================
 # THRESHOLDS / CURRENT SENSOR VALUES
 # ==================================================
 
@@ -28,24 +38,6 @@ light_threshold = None
 
 current_temperature = None
 current_light = None
-
-
-# ==================================================
-# FAN MANUAL OVERRIDE
-# ==================================================
-
-fan_override_active = False
-fan_override_rearmed = False
-fan_manual_state = False
-
-
-# ==================================================
-# LED MANUAL OVERRIDE
-# ==================================================
-
-led_override_active = False
-led_override_rearmed = False
-led_manual_state = False
 
 
 # ==================================================
@@ -104,11 +96,7 @@ def set_fan(state, source):
 
 
 # ==================================================
-# FAN AUTO
-#
-# temp > threshold -> FAN ON
-# temp < threshold -> FAN OFF
-# equal            -> HOLD
+# AUTO RULES
 # ==================================================
 
 def get_fan_auto_desired(temp):
@@ -125,50 +113,6 @@ def get_fan_auto_desired(temp):
     return None
 
 
-def evaluate_fan_auto(temp):
-    global fan_override_active
-    global fan_override_rearmed
-
-    desired = get_fan_auto_desired(temp)
-
-    if desired is None:
-        return
-
-    # Manual override đang active
-    if fan_override_active:
-
-        # Auto phải đi qua phía giống manual trước
-        if not fan_override_rearmed:
-
-            if desired == fan_manual_state:
-                fan_override_rearmed = True
-                print("FAN OVERRIDE -> REARMED")
-
-            return
-
-        # Đã re-arm, khi auto đổi sang phía ngược manual
-        # thì trả quyền lại cho AUTO
-        if desired != fan_manual_state:
-            fan_override_active = False
-            fan_override_rearmed = False
-
-            print("FAN OVERRIDE -> RELEASED")
-            set_fan(desired, "AUTO")
-
-        return
-
-    # Không có manual override
-    set_fan(desired, "AUTO")
-
-
-# ==================================================
-# LED AUTO
-#
-# light < threshold -> LED ON
-# light > threshold -> LED OFF
-# equal             -> HOLD
-# ==================================================
-
 def get_led_auto_desired(light):
 
     if light_threshold is None:
@@ -183,44 +127,26 @@ def get_led_auto_desired(light):
     return None
 
 
-def evaluate_led_auto(light):
-    global led_override_active
-    global led_override_rearmed
+def evaluate_auto_control():
 
-    desired = get_led_auto_desired(light)
-
-    if desired is None:
+    if system_mode != "AUTO":
         return
 
-    # Manual override đang active
-    if led_override_active:
+    if current_temperature is not None:
+        fan_desired = get_fan_auto_desired(current_temperature)
 
-        # Auto phải đi qua phía giống manual trước
-        if not led_override_rearmed:
+        if fan_desired is not None:
+            set_fan(fan_desired, "AUTO")
 
-            if desired == led_manual_state:
-                led_override_rearmed = True
-                print("LED OVERRIDE -> REARMED")
+    if current_light is not None:
+        led_desired = get_led_auto_desired(current_light)
 
-            return
-
-        # Đã re-arm, auto đổi sang phía ngược manual
-        # thì trả quyền lại cho AUTO
-        if desired != led_manual_state:
-            led_override_active = False
-            led_override_rearmed = False
-
-            print("LED OVERRIDE -> RELEASED")
-            set_led(desired, "AUTO")
-
-        return
-
-    # Không có manual override
-    set_led(desired, "AUTO")
+        if led_desired is not None:
+            set_led(led_desired, "AUTO")
 
 
 # ==================================================
-# SIMPLE JSON NUMBER PARSER
+# SIMPLE JSON PARSERS
 # ==================================================
 
 def extract_number(msg, key):
@@ -246,6 +172,55 @@ def extract_number(msg, key):
         return None
 
 
+def extract_string(msg, key):
+    clean = msg.replace(" ", "")
+    marker = '"' + key + '":"'
+
+    start = clean.find(marker)
+
+    if start == -1:
+        return None
+
+    start = start + len(marker)
+    end = clean.find('"', start)
+
+    if end == -1:
+        return None
+
+    return clean[start:end]
+
+
+# ==================================================
+# MODE CONTROL
+# ==================================================
+
+def set_system_mode(new_mode, source):
+    global system_mode
+
+    if new_mode != "MANUAL" and new_mode != "AUTO":
+        print("MODE -> INVALID:", new_mode)
+        return
+
+    if system_mode == new_mode:
+        print("MODE ->", system_mode, "[UNCHANGED]")
+        return
+
+    old_mode = system_mode
+    system_mode = new_mode
+
+    print(
+        "MODE ->",
+        old_mode,
+        "=>",
+        system_mode,
+        "[" + source + "]"
+    )
+
+    # Entering AUTO must immediately evaluate current sensors.
+    if system_mode == "AUTO":
+        evaluate_auto_control()
+
+
 # ==================================================
 # WIFI + MQTT
 # ==================================================
@@ -268,7 +243,7 @@ mqtt.connect_broker(
 # RETAINED FULL ACTUATOR SNAPSHOT
 #
 # Only restore ONCE after startup.
-# Runtime commands use V12.
+# Runtime manual commands use V12.
 # ==================================================
 
 def on_command(msg):
@@ -300,7 +275,11 @@ def on_command(msg):
 
 # ==================================================
 # V11
-# RETAINED THRESHOLDS
+# RETAINED CONTROL CONFIG
+#
+# Existing thresholds remain supported.
+# Optional field:
+#   "mode": "MANUAL" | "AUTO"
 # ==================================================
 
 def on_config(msg):
@@ -325,6 +304,11 @@ def on_config(msg):
         "light_threshold"
     )
 
+    mode_value = extract_string(
+        msg,
+        "mode"
+    )
+
     if temp_value is not None:
         temperature_threshold = temp_value
 
@@ -341,122 +325,46 @@ def on_config(msg):
         light_threshold
     )
 
+    if mode_value is not None:
+        set_system_mode(mode_value.upper(), "CONFIG")
+
 
 # ==================================================
 # V12
 # NON-RETAINED MANUAL ACTION EVENT
+#
+# Accepted only in MANUAL mode.
 # ==================================================
 
 def on_manual(msg):
-    global fan_override_active
-    global fan_override_rearmed
-    global fan_manual_state
-
-    global led_override_active
-    global led_override_rearmed
-    global led_manual_state
 
     print("V12 RECEIVED:", msg)
 
-    clean_msg = msg.replace(" ", "")
-
-
-    # ------------------------------------------------
-    # MANUAL LIGHT
-    # ------------------------------------------------
-
-    if '"target":"light"' in clean_msg:
-
-        if '"state":true' in clean_msg:
-            manual_state = True
-
-        elif '"state":false' in clean_msg:
-            manual_state = False
-
-        else:
-            return
-
-        # Manual phải tác động ngay
-        set_led(manual_state, "MANUAL")
-
-        led_manual_state = manual_state
-
-        desired = None
-
-        if current_light is not None:
-            desired = get_led_auto_desired(current_light)
-
-        # Manual khác AUTO hiện tại
-        # -> giữ manual override
-        if desired is None or desired != manual_state:
-
-            led_override_active = True
-            led_override_rearmed = False
-
-            print(
-                "LED OVERRIDE -> ACTIVE",
-                "manual=",
-                manual_state
-            )
-
-        else:
-            # Manual trùng AUTO
-            # -> không cần override
-            led_override_active = False
-            led_override_rearmed = False
-
-            print("LED OVERRIDE -> NOT NEEDED")
-
+    if system_mode != "MANUAL":
+        print("V12 -> IGNORED, MODE=AUTO")
         return
 
+    clean_msg = msg.replace(" ", "")
 
-    # ------------------------------------------------
-    # MANUAL FAN
-    # ------------------------------------------------
+    if '"state":true' in clean_msg:
+        manual_state = True
+
+    elif '"state":false' in clean_msg:
+        manual_state = False
+
+    else:
+        print("V12 -> INVALID STATE")
+        return
+
+    if '"target":"light"' in clean_msg:
+        set_led(manual_state, "WEB")
+        return
 
     if '"target":"fan"' in clean_msg:
+        set_fan(manual_state, "WEB")
+        return
 
-        if '"state":true' in clean_msg:
-            manual_state = True
-
-        elif '"state":false' in clean_msg:
-            manual_state = False
-
-        else:
-            return
-
-        # Manual phải tác động ngay
-        set_fan(manual_state, "MANUAL")
-
-        fan_manual_state = manual_state
-
-        desired = None
-
-        if current_temperature is not None:
-            desired = get_fan_auto_desired(
-                current_temperature
-            )
-
-        # Manual khác AUTO hiện tại
-        # -> giữ manual override
-        if desired is None or desired != manual_state:
-
-            fan_override_active = True
-            fan_override_rearmed = False
-
-            print(
-                "FAN OVERRIDE -> ACTIVE",
-                "manual=",
-                manual_state
-            )
-
-        else:
-            # Manual trùng AUTO
-            # -> không cần override
-            fan_override_active = False
-            fan_override_rearmed = False
-
-            print("FAN OVERRIDE -> NOT NEEDED")
+    print("V12 -> INVALID TARGET")
 
 
 # ==================================================
@@ -466,6 +374,13 @@ def on_manual(msg):
 mqtt.on_receive_message('V10', on_command)
 mqtt.on_receive_message('V11', on_config)
 mqtt.on_receive_message('V12', on_manual)
+
+
+# ==================================================
+# STARTUP STATUS
+# ==================================================
+
+print("CONTROL MODE ->", system_mode)
 
 
 # ==================================================
@@ -502,11 +417,10 @@ while True:
 
 
     # ------------------------------
-    # AUTO CONTROL
+    # CONTROL
     # ------------------------------
 
-    evaluate_fan_auto(temperature)
-    evaluate_led_auto(light)
+    evaluate_auto_control()
 
 
     # ------------------------------
@@ -522,7 +436,8 @@ while True:
         '"humidity":' + str(humidity) + ','
         '"light":' + str(light) + ','
         '"led_state":' + led_json + ','
-        '"fan_state":' + fan_json + '}'
+        '"fan_state":' + fan_json + ','
+        '"mode":"' + system_mode + '"}'
     )
 
     print(payload)
