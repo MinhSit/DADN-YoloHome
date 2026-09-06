@@ -15,7 +15,6 @@ import time
 
 dht = DHT20()
 rgb = RGBLed(pin0.pin, 4)
-ir = IR_RX(Pin(pin1.pin, Pin.IN))
 
 
 # ==================================================
@@ -51,10 +50,6 @@ system_mode = "MANUAL"
 # Actuator commands are accepted only in MANUAL.
 # SETUP is always accepted so local mode switching still works.
 # ==================================================
-
-IR_RELEASE_GAP_MS = 220
-ir_active_code = None
-ir_last_frame_at = None
 
 LED_PRESETS = [
     (255, 0, 0),
@@ -404,28 +399,47 @@ def apply_ir_action(code):
 
 
 def handle_ir_input():
-    global ir_active_code
-    global ir_last_frame_at
-
     code = ir.get_code()
+    raw = ir.get_raw_code()
+
+    ir.clear_code()
 
     if code is None:
         return
 
-    now = time.ticks_ms()
+    if raw is None:
+        return
 
-    quiet_gap = (
-        ir_last_frame_at is None
-        or time.ticks_diff(now, ir_last_frame_at) > IR_RELEASE_GAP_MS
+    # Only accept successfully decoded full data frames.
+    if not raw.startswith("Data:"):
+        return
+
+    # This YoloHome remote has runtime-confirmed address 0.
+    # Drop corrupted/foreign frames with another address.
+    if ", Addr: 0" not in raw:
+        print("IR DROP ADDR ->", code, raw)
+        return
+
+    valid_codes = (
+        IR_REMOTE_A,
+        IR_REMOTE_B,
+        IR_REMOTE_C,
+        IR_REMOTE_D,
+        IR_REMOTE_E,
+        IR_REMOTE_F,
+        IR_REMOTE_UP,
+        IR_REMOTE_DOWN,
+        IR_REMOTE_LEFT,
+        IR_REMOTE_RIGHT,
+        IR_REMOTE_SETUP
     )
 
-    if code != ir_active_code or quiet_gap:
-        print("IR RECEIVED ->", code)
-        ir_active_code = code
-        apply_ir_action(code)
+    if code not in valid_codes:
+        print("IR INVALID DATA ->", code, raw)
+        return
 
-    ir_last_frame_at = now
-    ir.clear_code()
+    print("IR RECEIVED ->", code, raw)
+    apply_ir_action(code)
 
 
 # ==================================================
@@ -571,6 +585,9 @@ mqtt.on_receive_message('V10', on_command)
 mqtt.on_receive_message('V11', on_config)
 mqtt.on_receive_message('V12', on_manual)
 
+ir = IR_RX(Pin(pin1.pin, Pin.IN))
+print("IR INIT -> AFTER MQTT SUBSCRIPTIONS")
+
 
 # ==================================================
 # STARTUP STATUS
@@ -588,8 +605,6 @@ while True:
 
     mqtt.check_message()
     handle_ir_input()
-
-    dht.read_dht20()
 
     temperature = dht.dht20_temperature()
     humidity = dht.dht20_humidity()
