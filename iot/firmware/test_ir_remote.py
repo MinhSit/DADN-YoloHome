@@ -36,23 +36,37 @@ BUTTON_NAMES = {
     IR_REMOTE_9: "9",
 }
 
+DEBOUNCE_MS = 300
+
 print("=== YoloHome IR Remote Test ===")
 print("IR receiver: P1")
 print("Point remote directly at receiver and press buttons")
 print("Try A, B, C, D, UP, DOWN")
+print("Debounce:", DEBOUNCE_MS, "ms")
 
-last_code = None
+last_accepted_code = None
+last_accepted_at = 0
 
 while True:
     code = ir.get_code()
 
-    if code is not None and code != last_code:
-        name = BUTTON_NAMES.get(code, "UNKNOWN")
-        print("IR ->", name, "code=", code)
-        last_code = code
+    if code is not None:
+        now = time.ticks_ms()
+
+        same_button_too_soon = (
+            code == last_accepted_code
+            and time.ticks_diff(now, last_accepted_at) < DEBOUNCE_MS
+        )
+
+        if not same_button_too_soon:
+            name = BUTTON_NAMES.get(code, "UNKNOWN")
+            print("IR ->", name, "code=", code)
+            last_accepted_code = code
+            last_accepted_at = now
+
+        # Always clear the current decoded frame. NEC repeat/full frames may
+        # arrive again while the physical button is still being pressed, so
+        # acceptance is controlled by the time gate above instead of by None.
         ir.clear_code()
 
-    if code is None:
-        last_code = None
-
-    time.sleep_ms(50)
+    time.sleep_ms(20)
