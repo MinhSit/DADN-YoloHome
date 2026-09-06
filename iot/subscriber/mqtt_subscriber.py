@@ -63,6 +63,14 @@ def on_message(client, userdata, msg):
     led_state = data["led_state"]
     fan_state = data["fan_state"]
 
+    # YoloHome v2 variable actuator fields.
+    # Defaults keep the subscriber backward-compatible with older V6 payloads.
+    led_r = int(data.get("led_r", 255))
+    led_g = int(data.get("led_g", 0))
+    led_b = int(data.get("led_b", 0))
+    fan_speed = int(data.get("fan_speed", 50 if fan_state else 0))
+    control_mode = str(data.get("mode", "MANUAL")).upper()
+
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -72,9 +80,14 @@ def on_message(client, userdata, msg):
                 humidity,
                 light,
                 led_state,
-                fan_state
+                led_r,
+                led_g,
+                led_b,
+                fan_state,
+                fan_speed,
+                control_mode
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 device_id,
@@ -82,7 +95,12 @@ def on_message(client, userdata, msg):
                 humidity,
                 light,
                 led_state,
-                fan_state
+                led_r,
+                led_g,
+                led_b,
+                fan_state,
+                fan_speed,
+                control_mode
             )
         )
 
@@ -95,7 +113,10 @@ def on_message(client, userdata, msg):
         humidity,
         light,
         led_state,
-        fan_state
+        (led_r, led_g, led_b),
+        fan_state,
+        fan_speed,
+        control_mode
     )
     print("-" * 50)
 
