@@ -14,8 +14,18 @@ import time
 dht = DHT20()
 rgb = RGBLed(pin0.pin, 4)
 
+
+# ==================================================
+# ACTUATOR STATE
+# ==================================================
+
 led_state = False
+led_color = (255, 0, 0)
+
 fan_state = False
+fan_speed = 0
+manual_fan_speed = 50
+AUTO_FAN_SPEED = 50
 
 
 # ==================================================
@@ -56,14 +66,53 @@ pin10.write_analog(0)
 
 
 # ==================================================
+# HELPERS
+# ==================================================
+
+def clamp_int(value, minimum, maximum):
+    value = int(round(value))
+
+    if value < minimum:
+        return minimum
+
+    if value > maximum:
+        return maximum
+
+    return value
+
+
+# ==================================================
 # OUTPUT HELPERS
 # ==================================================
+
+def set_led_color(r, g, b, source):
+    global led_color
+
+    new_color = (
+        clamp_int(r, 0, 255),
+        clamp_int(g, 0, 255),
+        clamp_int(b, 0, 255)
+    )
+
+    changed = led_color != new_color
+    led_color = new_color
+
+    if led_state:
+        rgb.show(0, led_color)
+
+    if changed:
+        print(
+            "LED COLOR ->",
+            led_color,
+            "[" + source + "]"
+        )
+
 
 def set_led(state, source):
     global led_state
 
     if state:
-        rgb.show(0, (255, 0, 0))
+        rgb.show(0, led_color)
     else:
         rgb.off(0)
 
@@ -76,23 +125,47 @@ def set_led(state, source):
         )
 
 
-def set_fan(state, source):
+def apply_fan_speed(speed, source):
     global fan_state
+    global fan_speed
 
-    if state:
-        # Runtime-tested PWM range is 0..1023
-        # 512 ~= 50%
-        pin10.write_analog(512)
-    else:
-        pin10.write_analog(0)
+    new_speed = clamp_int(speed, 0, 100)
+    new_state = new_speed > 0
 
-    if fan_state != state:
-        fan_state = state
+    pwm_value = int(round(new_speed * 1023 / 100))
+    pin10.write_analog(pwm_value)
+
+    if fan_speed != new_speed or fan_state != new_state:
+        fan_speed = new_speed
+        fan_state = new_state
+
         print(
             "FAN ->",
-            "ON" if state else "OFF",
+            "ON" if fan_state else "OFF",
+            "speed=" + str(fan_speed) + "%",
             "[" + source + "]"
         )
+
+
+def set_manual_fan_speed(speed, source):
+    global manual_fan_speed
+
+    new_speed = clamp_int(speed, 0, 100)
+
+    if new_speed > 0:
+        manual_fan_speed = new_speed
+
+    apply_fan_speed(new_speed, source)
+
+
+def set_fan(state, source):
+    if state:
+        if source == "AUTO":
+            apply_fan_speed(AUTO_FAN_SPEED, source)
+        else:
+            apply_fan_speed(manual_fan_speed, source)
+    else:
+        apply_fan_speed(0, source)
 
 
 # ==================================================
@@ -190,6 +263,18 @@ def extract_string(msg, key):
     return clean[start:end]
 
 
+def extract_bool(msg, key):
+    clean = msg.replace(" ", "")
+
+    if '"' + key + '":true' in clean:
+        return True
+
+    if '"' + key + '":false' in clean:
+        return False
+
+    return None
+
+
 # ==================================================
 # MODE CONTROL
 # ==================================================
@@ -255,19 +340,14 @@ def on_command(msg):
         print("V10 -> runtime snapshot ignored")
         return
 
-    clean_msg = msg.replace(" ", "")
+    led_restore = extract_bool(msg, "led_state")
+    fan_restore = extract_bool(msg, "fan_state")
 
-    if '"led_state":true' in clean_msg:
-        set_led(True, "RESTORE")
+    if led_restore is not None:
+        set_led(led_restore, "RESTORE")
 
-    elif '"led_state":false' in clean_msg:
-        set_led(False, "RESTORE")
-
-    if '"fan_state":true' in clean_msg:
-        set_fan(True, "RESTORE")
-
-    elif '"fan_state":false' in clean_msg:
-        set_fan(False, "RESTORE")
+    if fan_restore is not None:
+        set_fan(fan_restore, "RESTORE")
 
     v10_restore_done = True
     print("V10 STARTUP RESTORE -> DONE")
@@ -333,6 +413,15 @@ def on_config(msg):
 # V12
 # NON-RETAINED MANUAL ACTION EVENT
 #
+# Legacy commands remain valid:
+#   {"target":"light","state":true}
+#   {"target":"fan","state":true}
+#
+# Variable actuator commands:
+#   {"target":"light","r":0,"g":0,"b":255}
+#   {"target":"light","state":true,"r":0,"g":0,"b":255}
+#   {"target":"fan","speed":80}
+#
 # Accepted only in MANUAL mode.
 # ==================================================
 
@@ -344,24 +433,45 @@ def on_manual(msg):
         print("V12 -> IGNORED, MODE=AUTO")
         return
 
-    clean_msg = msg.replace(" ", "")
+    target = extract_string(msg, "target")
+    manual_state = extract_bool(msg, "state")
 
-    if '"state":true' in clean_msg:
-        manual_state = True
+    if target == "light":
+        r = extract_number(msg, "r")
+        g = extract_number(msg, "g")
+        b = extract_number(msg, "b")
 
-    elif '"state":false' in clean_msg:
-        manual_state = False
+        has_any_color = r is not None or g is not None or b is not None
 
-    else:
-        print("V12 -> INVALID STATE")
+        if has_any_color:
+            if r is None or g is None or b is None:
+                print("V12 -> INVALID RGB")
+                return
+
+            set_led_color(r, g, b, "WEB")
+
+        if manual_state is not None:
+            set_led(manual_state, "WEB")
+            return
+
+        if has_any_color:
+            return
+
+        print("V12 -> INVALID LIGHT COMMAND")
         return
 
-    if '"target":"light"' in clean_msg:
-        set_led(manual_state, "WEB")
-        return
+    if target == "fan":
+        speed = extract_number(msg, "speed")
 
-    if '"target":"fan"' in clean_msg:
-        set_fan(manual_state, "WEB")
+        if speed is not None:
+            set_manual_fan_speed(speed, "WEB")
+            return
+
+        if manual_state is not None:
+            set_fan(manual_state, "WEB")
+            return
+
+        print("V12 -> INVALID FAN COMMAND")
         return
 
     print("V12 -> INVALID TARGET")
@@ -389,7 +499,7 @@ print("CONTROL MODE ->", system_mode)
 
 while True:
 
-    # Nhận MQTT nếu có
+    # Receive MQTT if available.
     mqtt.check_message()
 
     # ------------------------------
@@ -436,7 +546,11 @@ while True:
         '"humidity":' + str(humidity) + ','
         '"light":' + str(light) + ','
         '"led_state":' + led_json + ','
+        '"led_r":' + str(led_color[0]) + ','
+        '"led_g":' + str(led_color[1]) + ','
+        '"led_b":' + str(led_color[2]) + ','
         '"fan_state":' + fan_json + ','
+        '"fan_speed":' + str(fan_speed) + ','
         '"mode":"' + system_mode + '"}'
     )
 
