@@ -1,6 +1,8 @@
 from yolobit import *
 from aiot_dht20 import DHT20
 from aiot_rgbled import RGBLed
+from aiot_ir_receiver import *
+from machine import Pin
 from mqtt import *
 WIFI_SSID = "YOUR_WIFI_SSID"
 WIFI_PASSWORD = "YOUR_WIFI_PASSWORD"
@@ -13,6 +15,7 @@ import time
 
 dht = DHT20()
 rgb = RGBLed(pin0.pin, 4)
+ir = IR_RX(Pin(pin1.pin, Pin.IN))
 
 
 # ==================================================
@@ -30,12 +33,36 @@ AUTO_FAN_SPEED = 50
 
 # ==================================================
 # CONTROL MODE
-#
-# MANUAL: V12 actuator commands are allowed.
-# AUTO:   sensor rules control actuators; V12 is ignored.
 # ==================================================
 
 system_mode = "MANUAL"
+
+
+# ==================================================
+# IR LOCAL CONTROL
+#
+# SETUP -> toggle MANUAL/AUTO
+# A     -> LED toggle
+# B     -> Fan toggle
+# C/D/E/F -> RED/GREEN/BLUE/WHITE
+# UP/DOWN  -> fan speed +/-20%
+# LEFT/RIGHT -> previous/next color preset
+#
+# Actuator commands are accepted only in MANUAL.
+# SETUP is always accepted so local mode switching still works.
+# ==================================================
+
+IR_RELEASE_GAP_MS = 220
+ir_active_code = None
+ir_last_frame_at = None
+
+LED_PRESETS = [
+    (255, 0, 0),
+    (0, 255, 0),
+    (0, 0, 255),
+    (255, 255, 255),
+]
+led_preset_index = 0
 
 
 # ==================================================
@@ -301,9 +328,104 @@ def set_system_mode(new_mode, source):
         "[" + source + "]"
     )
 
-    # Entering AUTO must immediately evaluate current sensors.
     if system_mode == "AUTO":
         evaluate_auto_control()
+
+
+# ==================================================
+# IR CONTROL
+# ==================================================
+
+def apply_ir_action(code):
+    global led_preset_index
+
+    if code == IR_REMOTE_SETUP:
+        if system_mode == "MANUAL":
+            set_system_mode("AUTO", "IR")
+        else:
+            set_system_mode("MANUAL", "IR")
+        return
+
+    if system_mode != "MANUAL":
+        print("IR -> IGNORED, MODE=AUTO")
+        return
+
+    if code == IR_REMOTE_A:
+        set_led(not led_state, "IR")
+        return
+
+    if code == IR_REMOTE_B:
+        set_fan(not fan_state, "IR")
+        return
+
+    if code == IR_REMOTE_C:
+        led_preset_index = 0
+        set_led_color(255, 0, 0, "IR")
+        return
+
+    if code == IR_REMOTE_D:
+        led_preset_index = 1
+        set_led_color(0, 255, 0, "IR")
+        return
+
+    if code == IR_REMOTE_E:
+        led_preset_index = 2
+        set_led_color(0, 0, 255, "IR")
+        return
+
+    if code == IR_REMOTE_F:
+        led_preset_index = 3
+        set_led_color(255, 255, 255, "IR")
+        return
+
+    if code == IR_REMOTE_UP:
+        base_speed = fan_speed if fan_speed > 0 else manual_fan_speed
+        set_manual_fan_speed(base_speed + 20, "IR")
+        return
+
+    if code == IR_REMOTE_DOWN:
+        base_speed = fan_speed if fan_speed > 0 else manual_fan_speed
+        set_manual_fan_speed(base_speed - 20, "IR")
+        return
+
+    if code == IR_REMOTE_LEFT:
+        led_preset_index = (led_preset_index - 1) % len(LED_PRESETS)
+        color = LED_PRESETS[led_preset_index]
+        set_led_color(color[0], color[1], color[2], "IR")
+        return
+
+    if code == IR_REMOTE_RIGHT:
+        led_preset_index = (led_preset_index + 1) % len(LED_PRESETS)
+        color = LED_PRESETS[led_preset_index]
+        set_led_color(color[0], color[1], color[2], "IR")
+        return
+
+    print("IR -> UNMAPPED code=", code)
+
+
+def handle_ir_input():
+    global ir_active_code
+    global ir_last_frame_at
+
+    code = ir.get_code()
+
+    if code is None:
+        return
+
+    now = time.ticks_ms()
+
+    quiet_gap = (
+        ir_last_frame_at is None
+        or time.ticks_diff(now, ir_last_frame_at) > IR_RELEASE_GAP_MS
+    )
+
+    if code != ir_active_code or quiet_gap:
+        print("IR RECEIVED ->", code)
+        ir_active_code = code
+        apply_ir_action(code)
+
+    ir_last_frame_at = now
+    ir.clear_code()
 
 
 # ==================================================
@@ -325,10 +447,6 @@ mqtt.connect_broker(
 
 # ==================================================
 # V10
-# RETAINED FULL ACTUATOR SNAPSHOT
-#
-# Only restore ONCE after startup.
-# Runtime manual commands use V12.
 # ==================================================
 
 def on_command(msg):
@@ -355,11 +473,6 @@ def on_command(msg):
 
 # ==================================================
 # V11
-# RETAINED CONTROL CONFIG
-#
-# Existing thresholds remain supported.
-# Optional field:
-#   "mode": "MANUAL" | "AUTO"
 # ==================================================
 
 def on_config(msg):
@@ -369,25 +482,10 @@ def on_config(msg):
 
     print("V11 RECEIVED:", msg)
 
-    temp_value = extract_number(
-        msg,
-        "temperature_threshold"
-    )
-
-    humidity_value = extract_number(
-        msg,
-        "humidity_threshold"
-    )
-
-    light_value = extract_number(
-        msg,
-        "light_threshold"
-    )
-
-    mode_value = extract_string(
-        msg,
-        "mode"
-    )
+    temp_value = extract_number(msg, "temperature_threshold")
+    humidity_value = extract_number(msg, "humidity_threshold")
+    light_value = extract_number(msg, "light_threshold")
+    mode_value = extract_string(msg, "mode")
 
     if temp_value is not None:
         temperature_threshold = temp_value
@@ -411,18 +509,6 @@ def on_config(msg):
 
 # ==================================================
 # V12
-# NON-RETAINED MANUAL ACTION EVENT
-#
-# Legacy commands remain valid:
-#   {"target":"light","state":true}
-#   {"target":"fan","state":true}
-#
-# Variable actuator commands:
-#   {"target":"light","r":0,"g":0,"b":255}
-#   {"target":"light","state":true,"r":0,"g":0,"b":255}
-#   {"target":"fan","speed":80}
-#
-# Accepted only in MANUAL mode.
 # ==================================================
 
 def on_manual(msg):
@@ -491,6 +577,7 @@ mqtt.on_receive_message('V12', on_manual)
 # ==================================================
 
 print("CONTROL MODE ->", system_mode)
+print("IR CONTROL -> READY on P1")
 
 
 # ==================================================
@@ -499,12 +586,8 @@ print("CONTROL MODE ->", system_mode)
 
 while True:
 
-    # Receive MQTT if available.
     mqtt.check_message()
-
-    # ------------------------------
-    # SENSOR READ
-    # ------------------------------
+    handle_ir_input()
 
     dht.read_dht20()
 
@@ -525,17 +608,7 @@ while True:
 
     current_light = light
 
-
-    # ------------------------------
-    # CONTROL
-    # ------------------------------
-
     evaluate_auto_control()
-
-
-    # ------------------------------
-    # TELEMETRY JSON
-    # ------------------------------
 
     led_json = "true" if led_state else "false"
     fan_json = "true" if fan_state else "false"
@@ -555,14 +628,9 @@ while True:
     )
 
     print(payload)
-
     mqtt.publish('V6', payload)
-
-
-    # ------------------------------
-    # WAIT 5s BUT KEEP MQTT RESPONSIVE
-    # ------------------------------
 
     for i in range(50):
         mqtt.check_message()
+        handle_ir_input()
         time.sleep_ms(100)
