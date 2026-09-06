@@ -36,16 +36,18 @@ BUTTON_NAMES = {
     IR_REMOTE_9: "9",
 }
 
-DEBOUNCE_MS = 300
+# NEC remotes commonly emit repeat/full frames while the same physical button
+# is still held. Treat a same-button frame as a new press only after a quiet gap.
+RELEASE_GAP_MS = 220
 
 print("=== YoloHome IR Remote Test ===")
 print("IR receiver: P1")
 print("Point remote directly at receiver and press buttons")
 print("Try A, B, C, D, UP, DOWN")
-print("Debounce:", DEBOUNCE_MS, "ms")
+print("Same-button re-arm gap:", RELEASE_GAP_MS, "ms")
 
-last_accepted_code = None
-last_accepted_at = 0
+active_code = None
+last_frame_at = None
 
 while True:
     code = ir.get_code()
@@ -53,20 +55,23 @@ while True:
     if code is not None:
         now = time.ticks_ms()
 
-        same_button_too_soon = (
-            code == last_accepted_code
-            and time.ticks_diff(now, last_accepted_at) < DEBOUNCE_MS
+        quiet_gap = (
+            last_frame_at is None
+            or time.ticks_diff(now, last_frame_at) > RELEASE_GAP_MS
         )
 
-        if not same_button_too_soon:
+        # Different button: accept immediately.
+        # Same button: only accept again after the remote has been quiet long
+        # enough to infer that the previous physical press was released.
+        if code != active_code or quiet_gap:
             name = BUTTON_NAMES.get(code, "UNKNOWN")
             print("IR ->", name, "code=", code)
-            last_accepted_code = code
-            last_accepted_at = now
+            active_code = code
 
-        # Always clear the current decoded frame. NEC repeat/full frames may
-        # arrive again while the physical button is still being pressed, so
-        # acceptance is controlled by the time gate above instead of by None.
+        # Update on every decoded frame, including suppressed repeats.
+        # While a button is held, repeat frames keep moving this timestamp,
+        # so the same press cannot retrigger the action.
+        last_frame_at = now
         ir.clear_code()
 
     time.sleep_ms(20)
